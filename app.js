@@ -1,216 +1,342 @@
-const ZONES = [
-  {
-    id: "A",
-    name: "North Flats",
-    size: "2.1 acres",
-    note: "Checked 6 days ago",
-    history: "Usually stable",
-    level: "green",
-    finding: "No visible issue",
-    detail: "Cages appear aligned; no unusual shell exposure.",
-    action: "Keep on regular rotation",
-    actionDetail: "No extra inspection needed today.",
-    confidence: 91,
-    image: "clear"
-  },
-  {
-    id: "B",
-    name: "Cedar Bend",
-    size: "1.8 acres",
-    note: "Checked 12 days ago",
-    history: "Fouling last August",
-    level: "yellow",
-    finding: "Moderate biofouling",
-    detail: "Growth is reducing visible mesh openings.",
-    action: "Check flow through cages",
-    actionDetail: "Flip or clean the heaviest cage row this week.",
-    confidence: 78,
-    image: "fouling"
-  },
-  {
-    id: "C",
-    name: "East Channel",
-    size: "2.4 acres",
-    note: "Checked 4 days ago",
-    history: "Strong current",
-    level: "green",
-    finding: "No visible issue",
-    detail: "Even cage spacing and normal shell pattern.",
-    action: "Keep on regular rotation",
-    actionDetail: "No extra inspection needed today.",
-    confidence: 88,
-    image: "clear"
-  },
-  {
-    id: "D",
-    name: "Deep Pocket",
-    size: "1.9 acres",
-    note: "Checked 9 days ago",
-    history: "Warm-water mortality",
-    level: "red",
-    finding: "Possible mortality increase",
-    detail: "More open and motionless shells than last scan.",
-    action: "Inspect first · sample 3 cages",
-    actionDetail: "Count live/dead oysters and photograph the sample.",
-    confidence: 86,
-    image: "mortality"
-  },
-  {
-    id: "E",
-    name: "South Shoal",
-    size: "2.0 acres",
-    note: "Checked 15 days ago",
-    history: "Oldest gear",
-    level: "yellow",
-    finding: "Light fouling visible",
-    detail: "Patchy growth on two outer cage rows.",
-    action: "Add to this week’s route",
-    actionDetail: "Spot-check outer rows before the weekend.",
-    confidence: 72,
-    image: "fouling"
-  },
-  {
-    id: "F",
-    name: "Outer Reach",
-    size: "1.8 acres",
-    note: "Checked 7 days ago",
-    history: "Gear shifted in storms",
-    level: "red",
-    finding: "Possible gear damage",
-    detail: "One cage line appears slack and out of alignment.",
-    action: "Inspect first · bring repair kit",
-    actionDetail: "Secure the line before the afternoon tide.",
-    confidence: 93,
-    image: "damage"
-  }
+const ZONE_NAMES = [
+  "North Flats", "Cedar Bend", "East Channel", "Deep Pocket", "South Shoal", "Outer Reach",
+  "Harbor Edge", "Long Ledge", "West Basin", "Gull Point", "Inner Bar", "Far Channel"
 ];
 
-const state = {
-  sessionStartedAt: new Date().toISOString(),
-  initialChoices: [],
-  finalChoices: [],
-  initialDecisionSeconds: null,
-  reportReviewSeconds: null,
-  stageStartedAt: Date.now(),
-  response: null
+const ISSUE_PROFILES = {
+  mortality: {
+    label: "Possible mortality increase",
+    shortLabel: "Mortality signal",
+    detail: "The sample shows more gaping and motionless shells than the surrounding rows.",
+    recommendation: "Count live and dead oysters in three sample cages",
+    actionDetail: "Photograph each sample, record the cage number, and compare mortality with the last inspection before moving or grading stock.",
+    photo: "assets/scan-mortality.jpg",
+    basePriority: 94,
+    duration: 75
+  },
+  fouling: {
+    label: "Heavy biofouling visible",
+    shortLabel: "Flow restriction",
+    detail: "Marine growth appears to be reducing open mesh and water flow through the gear.",
+    recommendation: "Check flow and clean the heaviest cage row",
+    actionDetail: "Lift two outside cages first. Flip or clean the row if mesh blockage matches the sample image.",
+    photo: "assets/scan-fouling.jpg",
+    basePriority: 72,
+    duration: 55
+  },
+  equipment: {
+    label: "Possible gear displacement",
+    shortLabel: "Gear alignment",
+    detail: "One cage and its support line appear slack and out of alignment with the adjacent row.",
+    recommendation: "Inspect the line and bring the repair kit",
+    actionDetail: "Check knots, clips, and anchor tension before the next high-energy tide. Secure loose gear before servicing stock.",
+    photo: "assets/scan-equipment.jpg",
+    basePriority: 88,
+    duration: 60
+  },
+  healthy: {
+    label: "No visible issue",
+    shortLabel: "Normal conditions",
+    detail: "Cages appear aligned with open mesh, closed shells, and no unusual accumulation.",
+    recommendation: "Keep this zone on its normal inspection rotation",
+    actionDetail: "No extra crew time is recommended today. Recheck during the next scheduled rotation.",
+    photo: "assets/scan-healthy.jpg",
+    basePriority: 24,
+    duration: 30
+  }
 };
 
+const state = { config: null, zones: [], conditions: null, generation: 0, commitment: null };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
-function scanArt(type) {
-  const base = `<rect width="180" height="120" fill="#315b5c"/><path d="M-10 26 Q40 5 90 27 T190 25 M-10 55 Q45 31 90 56 T190 54 M-10 88 Q42 68 95 89 T190 87" fill="none" stroke="#8fb6ae" stroke-width="1" opacity=".32"/>`;
-  const cages = `<path d="M20 73 L78 56 L155 72 L93 95 Z M78 56 L78 82 M155 72 L154 94 M20 73 L22 96 M22 96 L93 111 L154 94" fill="#27484a" stroke="#9bc0b4" stroke-width="1.2" opacity=".9"/><path d="M37 69 L106 91 M55 64 L123 87 M76 59 L142 80 M41 100 L103 78 M65 105 L126 83 M90 110 L148 89" stroke="#82a99f" stroke-width=".8" opacity=".65"/>`;
-  let marks = "";
-  if (type === "mortality") marks = `<g fill="none" stroke="#e8bf9f" stroke-width="2"><ellipse cx="60" cy="79" rx="8" ry="4" transform="rotate(14 60 79)"/><ellipse cx="91" cy="86" rx="8" ry="4" transform="rotate(-8 91 86)"/><ellipse cx="117" cy="78" rx="7" ry="3.5" transform="rotate(11 117 78)"/></g><circle cx="60" cy="79" r="13" fill="none" stroke="#e66c5b" stroke-width="1.5" stroke-dasharray="3 3"/>`;
-  if (type === "fouling") marks = `<g fill="#7aa47c" opacity=".8"><circle cx="61" cy="70" r="8"/><circle cx="69" cy="76" r="9"/><circle cx="82" cy="80" r="7"/><circle cx="117" cy="82" r="9"/><circle cx="127" cy="87" r="7"/></g>`;
-  if (type === "damage") marks = `<path d="M22 96 L93 111 L154 83" fill="none" stroke="#ef8e70" stroke-width="2.2"/><path d="M147 77 l14 12 M161 77 l-14 12" stroke="#ef8e70" stroke-width="2"/>`;
-  if (type === "clear") marks = `<g fill="#c9ded4" opacity=".55"><circle cx="57" cy="78" r="2"/><circle cx="87" cy="86" r="2"/><circle cx="116" cy="79" r="2"/></g>`;
-  return `<svg viewBox="0 0 180 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${base}${cages}${marks}<path d="M8 13h19M8 13v10M172 13h-19M172 13v10" stroke="#b7d2ca" opacity=".7"/></svg>`;
-}
-
-function zoneCard(zone) {
-  return `
-    <button class="zone-card" type="button" data-zone="${zone.id}" aria-pressed="false">
-      <div class="zone-title"><b>${zone.id}</b><span>${zone.name}</span></div>
-      <div class="rack-lines" aria-hidden="true"></div>
-      <p>${zone.note}</p>
-      <small>${zone.history}</small>
-    </button>`;
-}
-
-function reportRow(zone) {
-  const priority = zone.level === "red" ? "Inspect first" : zone.level === "yellow" ? "Check soon" : "Routine";
-  return `
-    <article class="report-row" data-level="${zone.level}">
-      <div class="report-zone"><b>${zone.id}</b><small>${zone.name}</small></div>
-      <div class="scan-thumb">${scanArt(zone.image)}<span>Example scan</span></div>
-      <div class="finding"><small>Visible finding</small><strong>${zone.finding}</strong><p>${zone.detail}</p></div>
-      <div class="action"><small>Recommended next step</small><strong>${zone.action}</strong><p>${zone.actionDetail}</p></div>
-      <div class="confidence"><small>${priority} · Confidence</small><div class="confidence-bar"><i style="width:${zone.confidence}%"></i></div><b>${zone.confidence}%</b></div>
-    </article>`;
-}
-
-function finalChoiceCard(zone) {
-  const label = zone.level === "red" ? "Inspect first" : zone.level === "yellow" ? "Check soon" : "Routine";
-  return `
-    <button class="choice-card" type="button" data-zone="${zone.id}" aria-pressed="false">
-      <i class="mini-status ${zone.level}"></i>
-      <b>Zone ${zone.id}</b>
-      <small>${zone.name}</small>
-      <em>${label}</em>
-    </button>`;
-}
-
-function render() {
-  $("#initial-zone-grid").innerHTML = ZONES.map(zoneCard).join("");
-  const sorted = [...ZONES].sort((a, b) => ({ red: 0, yellow: 1, green: 2 })[a.level] - ({ red: 0, yellow: 1, green: 2 })[b.level]);
-  $("#report-list").innerHTML = sorted.map(reportRow).join("");
-  $("#final-choice-grid").innerHTML = ZONES.map(finalChoiceCard).join("");
-}
-
-function toggleChoice(stage, id) {
-  const key = stage === "initial" ? "initialChoices" : "finalChoices";
-  const choices = state[key];
-  const index = choices.indexOf(id);
-  if (index >= 0) {
-    choices.splice(index, 1);
-  } else if (choices.length < 2) {
-    choices.push(id);
-  } else {
-    showToast("You can inspect only two zones today.");
-    return;
+function hashString(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
-  updateChoices(stage);
+  return hash >>> 0;
 }
 
-function updateChoices(stage) {
-  const key = stage === "initial" ? "initialChoices" : "finalChoices";
-  const choices = state[key];
-  const root = stage === "initial" ? $("#initial-zone-grid") : $("#final-choice-grid");
-  const counter = stage === "initial" ? $("#initial-counter") : $("#final-counter");
-  const button = stage === "initial" ? $("#show-report") : $("#compare-button");
-  const helper = stage === "initial" ? $("#initial-helper") : $("#final-helper");
-  $$('[data-zone]', root).forEach(card => {
-    const selected = choices.includes(card.dataset.zone);
-    card.classList.toggle("is-selected", selected);
-    card.setAttribute("aria-pressed", String(selected));
-  });
-  $("strong", counter).textContent = choices.length;
-  counter.classList.toggle("is-ready", choices.length === 2);
-  button.disabled = choices.length !== 2;
-  helper.textContent = choices.length === 2 ? `Zones ${choices.join(" and ")} selected.` : `Select ${2 - choices.length} more zone${choices.length === 1 ? "" : "s"} to continue.`;
+function randomFromSeed(seed) {
+  return function random() {
+    seed += 0x6D2B79F5;
+    let value = seed;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-function showStage(number) {
-  $$(".stage").forEach(stage => stage.classList.remove("is-visible"));
-  $(`#stage-${["one", "two", "three"][number - 1]}`).classList.add("is-visible");
-  $$("[data-step-indicator]").forEach(step => {
-    const stepNumber = Number(step.dataset.stepIndicator);
-    step.classList.toggle("is-active", stepNumber === number);
-    step.classList.toggle("is-complete", stepNumber < number);
-    if (stepNumber < number) $("span", step).textContent = "✓";
-  });
-  state.stageStartedAt = Date.now();
+function between(random, min, max, decimals = 0) {
+  const value = min + random() * (max - min);
+  return Number(value.toFixed(decimals));
+}
+
+function shuffle(array, random) {
+  const output = [...array];
+  for (let i = output.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [output[i], output[j]] = [output[j], output[i]];
+  }
+  return output;
+}
+
+function issueMix(count, random) {
+  const base = count === 2
+    ? ["mortality", "healthy"]
+    : count === 3
+      ? ["mortality", "fouling", "healthy"]
+      : ["mortality", "equipment", "fouling", "healthy"];
+  while (base.length < count) {
+    const draw = random();
+    base.push(draw < .48 ? "healthy" : draw < .72 ? "fouling" : draw < .9 ? "equipment" : "mortality");
+  }
+  return shuffle(base, random);
+}
+
+function buildZones(config) {
+  const seed = hashString(`${config.farmName}|${config.location}|${config.zoneCount}|${state.generation}`);
+  const random = randomFromSeed(seed);
+  const issues = issueMix(config.zoneCount, random);
+  const rawAreas = Array.from({ length: config.zoneCount }, () => between(random, .65, 1.35, 3));
+  const areaTotal = rawAreas.reduce((sum, value) => sum + value, 0);
+
+  return issues.map((issue, index) => {
+    const profile = ISSUE_PROFILES[issue];
+    const acres = Number((config.acres * rawAreas[index] / areaTotal).toFixed(1));
+    const mortality = issue === "mortality" ? between(random, 13, 24, 1) : issue === "fouling" ? between(random, 5, 10, 1) : issue === "equipment" ? between(random, 3, 8, 1) : between(random, 1.2, 3.8, 1);
+    const survival = Number((100 - mortality).toFixed(1));
+    const fouling = issue === "fouling" ? between(random, 68, 92) : issue === "healthy" ? between(random, 5, 19) : between(random, 18, 48);
+    const oysters = Math.max(3500, Math.round(acres * between(random, 28000, 46000) / 100) * 100);
+    const averageSize = between(random, 44, 84);
+    const priorityScore = Math.min(99, Math.round(profile.basePriority + between(random, -6, 5)));
+    let status = "green";
+    if (issue === "mortality" || (issue === "equipment" && priorityScore > 87)) status = "red";
+    else if (issue !== "healthy") status = "yellow";
+    const confidence = issue === "healthy" ? between(random, 83, 95) : between(random, 74, 94);
+    const trend = issue === "mortality" ? between(random, -14, -7) : issue === "fouling" ? between(random, -7, -2) : issue === "healthy" ? between(random, 1, 6) : between(random, -4, 1);
+    return {
+      id: String.fromCharCode(65 + index),
+      name: ZONE_NAMES[index],
+      issue,
+      acres,
+      oysters,
+      mortality,
+      survival,
+      fouling,
+      averageSize,
+      priorityScore,
+      status,
+      confidence,
+      trend,
+      gearCondition: issue === "equipment" ? "Needs inspection" : issue === "healthy" ? "Secure" : "No visible shift",
+      scanMinute: 7 + index * 11 + Math.floor(random() * 5),
+      imagePosition: `${between(random, 38, 62)}% ${between(random, 38, 62)}%`,
+      ...profile
+    };
+  }).sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function buildConditions(config) {
+  const random = randomFromSeed(hashString(`${config.location}|weather|${state.generation}`));
+  const waterTemp = between(random, 49, 66);
+  const tideHour = between(random, 7, 11);
+  const tideMinute = [5, 18, 27, 42, 51][Math.floor(random() * 5)];
+  return {
+    tide: `Low ${tideHour}:${String(tideMinute).padStart(2, "0")} AM`,
+    water: `${waterTemp}°F · ${random() > .45 ? "Murky" : "Fair"} visibility`,
+    weather: `${random() > .5 ? "Cloudy" : "Partly cloudy"} · ${between(random, 5, 13)} kt`,
+    coverage: `${between(random, 91, 98)}% of gear sampled`
+  };
+}
+
+function showView(id) {
+  $$(".view").forEach(view => view.classList.toggle("is-visible", view.id === id));
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function showComparison() {
-  const initial = state.initialChoices.map(id => ZONES.find(zone => zone.id === id));
-  const final = state.finalChoices.map(id => ZONES.find(zone => zone.id === id));
-  const summary = (title, zones) => `
-    <div class="choice-summary">
-      <small>${title}</small>
-      <div class="summary-zones">
-        ${zones.map(zone => `<div class="summary-zone"><b>${zone.id}</b><span>${zone.name}</span></div>`).join("")}
+function readConfig() {
+  const data = new FormData($("#farm-form"));
+  return {
+    farmName: data.get("farmName").trim(),
+    location: data.get("location").trim(),
+    acres: Number(data.get("acres")),
+    zoneCount: Number(data.get("zoneCount")),
+    gear: data.get("gear"),
+    crewHours: Number(data.get("crewHours"))
+  };
+}
+
+function saveConfig(config) {
+  localStorage.setItem("farmSignalSetup", JSON.stringify(config));
+}
+
+function loadSavedConfig() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("farmSignalSetup"));
+    if (!saved) return;
+    $("#farm-name").value = saved.farmName || "";
+    $("#farm-location").value = saved.location || "";
+    $("#farm-acres").value = saved.acres || 12;
+    $("#zone-count").value = saved.zoneCount || 6;
+    $("#gear-type").value = saved.gear || "Floating cages";
+    $("#crew-hours").value = saved.crewHours || 4;
+  } catch (_) {
+    localStorage.removeItem("farmSignalSetup");
+  }
+}
+
+function runLoadingSequence(callback) {
+  const steps = [
+    [18, "Mapping your growing zones…", "Dividing the lease into inspection areas."],
+    [46, "Estimating visible stock…", "Creating sample oyster counts and survival indicators."],
+    [73, "Checking for visible changes…", "Comparing mortality, fouling, and gear cues."],
+    [100, "Building your crew plan…", "Ranking zones by urgency and practical next step."]
+  ];
+  showView("loading-view");
+  let index = 0;
+  const advance = () => {
+    const [progress, title, copy] = steps[index];
+    $("#loading-progress").style.width = `${progress}%`;
+    $("#loading-title").textContent = title;
+    $("#loading-copy").textContent = copy;
+    index += 1;
+    if (index < steps.length) setTimeout(advance, 430);
+    else setTimeout(callback, 500);
+  };
+  advance();
+}
+
+function statusLabel(status) {
+  return status === "red" ? "Inspect first" : status === "yellow" ? "Check soon" : "Routine";
+}
+
+function formatCount(value) {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function conditionMarkup(icon, label, value) {
+  return `<div class="condition"><span aria-hidden="true">${icon}</span><div><small>${label}</small><b>${value}</b></div></div>`;
+}
+
+function renderConditions() {
+  const conditions = state.conditions;
+  $("#conditions-bar").innerHTML = [
+    conditionMarkup("↕", "Tide window", conditions.tide),
+    conditionMarkup("≈", "Water", conditions.water),
+    conditionMarkup("◒", "Surface", conditions.weather),
+    conditionMarkup("◎", "Sample coverage", conditions.coverage)
+  ].join("");
+}
+
+function renderMetrics() {
+  const totalOysters = state.zones.reduce((sum, zone) => sum + zone.oysters, 0);
+  const liveEstimate = state.zones.reduce((sum, zone) => sum + zone.oysters * zone.survival / 100, 0);
+  const overallSurvival = liveEstimate / totalOysters * 100;
+  const urgent = state.zones.filter(zone => zone.status === "red").length;
+  const attention = state.zones.filter(zone => zone.status !== "green").length;
+  const harvestReady = state.zones.reduce((sum, zone) => sum + (zone.averageSize >= 70 ? zone.oysters * zone.survival / 100 : 0), 0);
+  const cards = [
+    ["Estimated live stock", formatCount(Math.round(liveEstimate / 100) * 100), `Across ${state.config.zoneCount} sample zones`, ""],
+    ["Estimated survival", `${overallSurvival.toFixed(1)}%`, "Based on visible sample cues", ""],
+    ["Zones needing attention", `${attention} of ${state.config.zoneCount}`, urgent ? `${urgent} marked inspect first` : "No urgent zone in this sample", attention ? "attention" : ""],
+    ["Near harvest size", formatCount(Math.round(harvestReady / 100) * 100), "Oysters in zones averaging 70mm+", ""]
+  ];
+  $("#metric-grid").innerHTML = cards.map(([label, value, note, className]) => `<article class="metric-card ${className}"><small>${label}</small><strong>${value}</strong><p>${note}</p><i aria-hidden="true"></i></article>`).join("");
+}
+
+function renderCrewPlan() {
+  const priority = [...state.zones].sort((a, b) => b.priorityScore - a.priorityScore).slice(0, Math.min(2, state.zones.length));
+  $("#crew-plan").innerHTML = priority.map((zone, index) => `
+    <article class="crew-task">
+      <span class="task-order">${index + 1}</span>
+      <div><small>Zone ${zone.id} · ${zone.name}</small><h3>${zone.recommendation}</h3><p>${zone.detail}</p></div>
+      <span class="task-time">≈ ${zone.duration} min</span>
+    </article>`).join("");
+}
+
+function renderMap() {
+  $("#map-location").textContent = state.config.location;
+  $("#map-acres").textContent = `${state.config.acres} acres`;
+  $("#map-zones").textContent = state.config.zoneCount;
+  $("#map-gear").textContent = state.config.gear;
+  $("#zone-map-grid").innerHTML = state.zones.map(zone => `
+    <button class="map-zone" type="button" data-zone-id="${zone.id}" data-status="${zone.status}" aria-label="Open report for Zone ${zone.id}, ${zone.name}">
+      <span class="zone-letter">${zone.id}</span><i class="zone-status ${zone.status}"></i><b>${zone.name}</b><small>${zone.acres} acres · ${formatCount(zone.oysters)} oysters</small><div class="mini-bars" aria-hidden="true"></div><em>${statusLabel(zone.status)}</em>
+    </button>`).join("");
+}
+
+function reportMarkup(zone) {
+  return `
+    <article class="zone-report" data-attention="${zone.status !== "green"}">
+      <div class="report-photo">
+        <img src="${zone.photo}" style="object-position:${zone.imagePosition}" alt="Simulated scan showing ${zone.label.toLowerCase()} in Zone ${zone.id}" />
+        <div class="image-overlay"></div><span class="scan-label">Simulated scan · Zone ${zone.id}</span>
+        <div class="photo-finding"><small>Visible finding</small><b>${zone.label}</b></div><span class="photo-time">Frame ${String(zone.scanMinute).padStart(2,"0")}:24</span>
       </div>
+      <div class="report-body">
+        <div class="report-heading"><div><h3>Zone ${zone.id} · ${zone.name}</h3><p>${zone.acres} acres · ${state.config.gear}</p></div><span class="status-pill ${zone.status}">${statusLabel(zone.status)}</span></div>
+        <div class="zone-metrics"><div><small>Live stock est.</small><b>${formatCount(Math.round(zone.oysters * zone.survival / 100 / 100) * 100)}</b></div><div><small>Survival est.</small><b>${zone.survival}%</b></div><div><small>Avg. size</small><b>${zone.averageSize} mm</b></div></div>
+        <div class="recommendation"><span>→</span><div><small>Recommended next step</small><p>${zone.recommendation}</p></div></div>
+        <button class="open-report" type="button" data-zone-id="${zone.id}">View evidence and full action</button>
+      </div>
+    </article>`;
+}
+
+function renderReports(filter = "all") {
+  const zones = filter === "attention" ? state.zones.filter(zone => zone.status !== "green") : state.zones;
+  $("#zone-report-grid").innerHTML = zones.map(reportMarkup).join("");
+}
+
+function renderDashboard() {
+  const config = state.config;
+  $("#dashboard-farm-name").textContent = config.farmName;
+  $("#dashboard-location").textContent = config.location;
+  $("#dashboard-acres").textContent = `${config.acres} acres`;
+  $("#dashboard-gear").textContent = config.gear;
+  $("#crew-window-label").textContent = config.crewHours === 8 ? "full-day" : `${config.crewHours}-hour`;
+  $("#scan-time").textContent = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date());
+  renderConditions();
+  renderMetrics();
+  renderCrewPlan();
+  renderMap();
+  renderReports();
+  $("#edit-setup").hidden = false;
+  showView("dashboard-view");
+}
+
+function generateReport(showLoader = true) {
+  state.zones = buildZones(state.config);
+  state.conditions = buildConditions(state.config);
+  state.commitment = null;
+  $("#commitment-box").hidden = false;
+  $("#pilot-form").hidden = true;
+  $("#commitment-result").hidden = true;
+  if (showLoader) runLoadingSequence(renderDashboard);
+  else renderDashboard();
+}
+
+function openZone(id) {
+  const zone = state.zones.find(item => item.id === id);
+  if (!zone) return;
+  $("#modal-content").innerHTML = `
+    <div class="modal-photo"><img src="${zone.photo}" style="object-position:${zone.imagePosition}" alt="Simulated underwater evidence for Zone ${zone.id}" /></div>
+    <div class="modal-body">
+      <div class="modal-title-row"><div><p class="eyebrow">Zone ${zone.id} evidence</p><h2 id="modal-title">${zone.name}</h2></div><span class="status-pill ${zone.status}">${statusLabel(zone.status)}</span></div>
+      <p>${zone.detail} This fictional finding is shown at ${zone.confidence}% sample confidence and should always be confirmed in person.</p>
+      <div class="modal-data"><div><small>Estimated oysters</small><b>${formatCount(zone.oysters)}</b></div><div><small>Mortality signal</small><b>${zone.mortality}%</b></div><div><small>Mesh fouling</small><b>${zone.fouling}%</b></div><div><small>Gear condition</small><b>${zone.gearCondition}</b></div></div>
+      <div class="modal-action"><small>Recommended crew action</small><b>${zone.recommendation}</b><p>${zone.actionDetail}</p></div>
     </div>`;
-  $("#comparison").innerHTML = `${summary("Before the report", initial)}<span class="comparison-arrow" aria-hidden="true">→</span>${summary("After the report", final)}`;
-  const changed = [...state.initialChoices].sort().join() !== [...state.finalChoices].sort().join();
-  const priorityChosen = state.finalChoices.filter(id => ["D", "F"].includes(id)).length;
-  $("#change-callout").innerHTML = changed
-    ? `<i></i><span>You changed your plan after seeing the report${priorityChosen === 2 ? " and selected both high-priority zones" : ""}.</span>`
-    : `<i></i><span>You kept your original plan after seeing the report.</span>`;
+  $("#zone-modal").hidden = false;
+  document.body.style.overflow = "hidden";
+  $(".modal-close").focus();
+}
+
+function closeModal() {
+  $("#zone-modal").hidden = true;
+  document.body.style.overflow = "";
 }
 
 function showToast(message) {
@@ -218,138 +344,92 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.add("is-visible");
   clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => toast.classList.remove("is-visible"), 2200);
+  showToast.timer = setTimeout(() => toast.classList.remove("is-visible"), 2300);
 }
 
-function resetSession() {
-  if (!window.confirm("Start over and clear the current interview response?")) return;
-  localStorage.removeItem("farmSignalCurrentResponse");
-  window.location.reload();
-}
-
-function formValues(form) {
-  const data = new FormData(form);
-  return {
-    influence: data.get("influence"),
-    usefulness: Number(data.get("usefulness")),
-    commitment: data.get("commitment"),
-    willingToShare: data.getAll("share"),
-    name: (data.get("name") || "").trim(),
-    contact: (data.get("contact") || "").trim()
-  };
-}
-
-function validateCommitment(response) {
-  if (response.commitment === "no") return true;
-  if (!response.name || !response.contact) {
-    showToast("Add your name and contact information for a follow-up.");
-    $("input[name='name']").focus();
-    return false;
-  }
-  if (response.commitment === "pilot" && response.willingToShare.length === 0) {
-    showToast("Choose at least one item you could share for a pilot.");
-    return false;
-  }
-  return true;
-}
-
-function saveResponse(response) {
-  const changedPlan = [...state.initialChoices].sort().join() !== [...state.finalChoices].sort().join();
-  state.response = {
-    ...response,
-    submittedAt: new Date().toISOString(),
-    changedPlan,
-    strongPilotSignal: response.commitment === "pilot" && response.willingToShare.length > 0 && Boolean(response.contact)
-  };
-  const result = {
-    prototype: "FarmSignal oyster inspection decision test",
-    sessionStartedAt: state.sessionStartedAt,
-    scenario: "Pemaquid Reach · October 14 · two-zone crew limit",
-    initialChoices: state.initialChoices,
-    finalChoices: state.finalChoices,
-    initialDecisionSeconds: state.initialDecisionSeconds,
-    reportReviewSeconds: state.reportReviewSeconds,
-    ...state.response
-  };
-  localStorage.setItem("farmSignalCurrentResponse", JSON.stringify(result));
-  const history = JSON.parse(localStorage.getItem("farmSignalStudyHistory") || "[]");
-  history.push(result);
-  localStorage.setItem("farmSignalStudyHistory", JSON.stringify(history));
-  return result;
-}
-
-function showThankYou(result) {
-  $$(".stage").forEach(stage => stage.classList.remove("is-visible"));
-  $("#thank-you").classList.add("is-visible");
-  $$("[data-step-indicator]").forEach(step => {
-    step.classList.remove("is-active");
-    step.classList.add("is-complete");
-    $("span", step).textContent = "✓";
-  });
-  const isStrong = result.strongPilotSignal;
-  const isFollowUp = result.commitment === "follow-up";
-  $("#thank-you-copy").textContent = isStrong
-    ? "You recorded a concrete interest in testing the service. The researcher can follow up using the details you provided."
-    : isFollowUp
-      ? "You requested a follow-up conversation. The researcher can use it to understand what you would need before a pilot."
-      : "Your honest response is useful—even a no helps determine whether this problem is worth pursuing.";
-  $("#signal-card").innerHTML = `
-    <strong>${isStrong ? "Strong pilot signal" : isFollowUp ? "Follow-up signal" : "No pilot signal yet"}</strong>
-    <span>${isStrong ? `Willing to share: ${result.willingToShare.join(", ")}.` : isFollowUp ? "Interested enough to invest time in another conversation." : "The service did not earn a next step in this interview."}</span>`;
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function downloadResult() {
-  const result = localStorage.getItem("farmSignalCurrentResponse");
-  if (!result) return;
-  const blob = new Blob([result], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `farmsignal-session-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-render();
-
-$("#initial-zone-grid").addEventListener("click", event => {
-  const card = event.target.closest("[data-zone]");
-  if (card) toggleChoice("initial", card.dataset.zone);
-});
-
-$("#final-choice-grid").addEventListener("click", event => {
-  const card = event.target.closest("[data-zone]");
-  if (card) toggleChoice("final", card.dataset.zone);
-});
-
-$("#show-report").addEventListener("click", () => {
-  state.initialDecisionSeconds = Math.round((Date.now() - state.stageStartedAt) / 1000);
-  showStage(2);
-});
-
-$("#compare-button").addEventListener("click", () => {
-  state.reportReviewSeconds = Math.round((Date.now() - state.stageStartedAt) / 1000);
-  showComparison();
-  showStage(3);
-});
-
-$$('input[name="commitment"]').forEach(input => input.addEventListener("change", event => {
-  const needsDetails = event.target.value !== "no";
-  $("#pilot-details").hidden = !needsDetails;
-  $("input[name='name']").required = needsDetails;
-  $("input[name='contact']").required = needsDetails;
-}));
-
-$("#response-form").addEventListener("submit", event => {
+$("#farm-form").addEventListener("submit", event => {
   event.preventDefault();
-  const response = formValues(event.currentTarget);
-  if (!validateCommitment(response)) return;
-  const result = saveResponse(response);
-  showThankYou(result);
+  state.config = readConfig();
+  state.generation = 0;
+  saveConfig(state.config);
+  generateReport(true);
 });
 
-$("#download-button").addEventListener("click", downloadResult);
-$("#new-session-button").addEventListener("click", resetSession);
-$("#reset-button").addEventListener("click", resetSession);
+$("#edit-setup").addEventListener("click", () => {
+  $("#edit-setup").hidden = true;
+  showView("setup-view");
+});
 
+$("#regenerate-button").addEventListener("click", () => {
+  state.generation += 1;
+  generateReport(true);
+});
+
+$("#zone-map-grid").addEventListener("click", event => {
+  const button = event.target.closest("[data-zone-id]");
+  if (button) openZone(button.dataset.zoneId);
+});
+
+$("#zone-report-grid").addEventListener("click", event => {
+  const button = event.target.closest("[data-zone-id]");
+  if (button) openZone(button.dataset.zoneId);
+});
+
+$(".report-filter").addEventListener("click", event => {
+  const button = event.target.closest("[data-filter]");
+  if (!button) return;
+  $$("[data-filter]", event.currentTarget).forEach(item => item.classList.toggle("is-active", item === button));
+  renderReports(button.dataset.filter);
+});
+
+$("#zone-modal").addEventListener("click", event => {
+  if (event.target.closest("[data-close-modal]")) closeModal();
+});
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !$("#zone-modal").hidden) closeModal();
+});
+
+$("#commitment-box").addEventListener("click", event => {
+  const button = event.target.closest("[data-commitment]");
+  if (!button) return;
+  state.commitment = button.dataset.commitment;
+  if (state.commitment === "no") {
+    $("#commitment-box").hidden = true;
+    const result = $("#commitment-result");
+    result.hidden = false;
+    result.innerHTML = "<b>Thank you for the honest answer.</b><p>Knowing that this would not change your workflow is exactly the kind of signal this prototype is meant to collect.</p>";
+    localStorage.setItem("farmSignalCommitment", JSON.stringify({ type: "no", farm: state.config, submittedAt: new Date().toISOString() }));
+  } else {
+    $("#commitment-box").hidden = true;
+    $("#pilot-form").hidden = false;
+    $("#pilot-form input").focus();
+  }
+});
+
+$("#pilot-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  const shared = data.getAll("share");
+  if (state.commitment === "pilot" && shared.length === 0) {
+    showToast("Choose at least one item you could share for a pilot.");
+    return;
+  }
+  const response = { type: state.commitment, name: data.get("name").trim(), contact: data.get("contact").trim(), shared, farm: state.config, submittedAt: new Date().toISOString() };
+  localStorage.setItem("farmSignalCommitment", JSON.stringify(response));
+  event.currentTarget.hidden = true;
+  const result = $("#commitment-result");
+  result.hidden = false;
+  result.innerHTML = state.commitment === "pilot"
+    ? `<b>Pilot interest recorded.</b><p>You offered to share ${shared.join(", ").toLowerCase()}. Please tell the interviewer so they can follow up.</p>`
+    : "<b>Follow-up interest recorded.</b><p>Please tell the interviewer you would be open to a 20-minute conversation.</p>";
+});
+
+loadSavedConfig();
+
+if (new URLSearchParams(window.location.search).get("demo") === "1") {
+  state.config = readConfig();
+  state.zones = buildZones(state.config);
+  state.conditions = buildConditions(state.config);
+  renderDashboard();
+}

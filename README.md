@@ -1,10 +1,12 @@
-# FarmSignal decision-test MVP
+# FarmSignal personalized decision-test MVP
 
-FarmSignal is a scrappy, working prototype for testing one research question:
+FarmSignal is a working prototype for testing one research question:
 
 > After seeing a zone-by-zone report that points out possible mortality, fouling, and equipment problems, will oyster-farm operators take a real step toward testing the service?
 
-This is deliberately **not** a real scan or diagnostic tool. All farm conditions, findings, confidence values, and scan illustrations are fictional and preloaded.
+This is deliberately **not** a real scan or diagnostic tool. An operator enters a farm location, lease size, number of growing zones, gear type, and crew window. The app then creates a customized fictional report with zone-level oyster counts, survival indicators, possible visible problems, underwater sample images, and a recommended crew route.
+
+All conditions, findings, confidence values, oyster estimates, recommendations, and underwater images are simulated. The interface labels them accordingly.
 
 ## Run it
 
@@ -20,18 +22,20 @@ You can also open `index.html` directly, although the local server is more repre
 
 ## What the prototype tests
 
-1. The operator sees ordinary pre-departure context and chooses only two of six zones.
-2. The operator reviews a fake overnight scan with visible findings and concrete next steps.
-3. The operator chooses two zones again, making any change in priorities observable.
-4. The operator rates usefulness and either declines, requests a conversation, or makes a stronger pilot commitment by providing contact information and offering a real farm input.
+1. The operator personalizes the demo using the shape of their real operation.
+2. The app generates between 2 and 12 fictional zones with different stock, survival, size, fouling, and gear conditions.
+3. The operator receives a prioritized two-stop crew route with time estimates and concrete actions.
+4. The operator can inspect a map, open evidence for any zone, and filter to areas needing attention.
+5. The operator either declines, requests a conversation, or makes a stronger pilot commitment by providing contact information and offering a real farm input.
 
-The prototype records decision time, before/after choices, the information that influenced the choice, usefulness, and pilot commitment. A completed session is stored only in that browser. The researcher should click **Download session result** before starting the next interview.
+Farm setup and pilot interest are stored only in that browser. During a moderated test, the researcher should record the participant's response separately before starting the next interview.
 
 ## Suggested interview protocol
 
-- Do not explain the colored report before the participant sees it.
-- Ask them to think aloud, but do not recommend a zone.
-- Observe whether they understand why a zone was prioritized and which report element they use.
+- Ask the operator to enter details close to their real farm, then think aloud as the report appears.
+- Do not explain the colored report before the participant explores it.
+- Observe whether they understand why a zone was prioritized and whether they open the supporting evidence.
+- Ask whether the two-stop route would change where they sent the crew that day.
 - Treat “Yes, contact me about a pilot” as a strong signal only when the operator also supplies contact information and offers at least one farm input.
 - Download the JSON response at the end of each interview.
 
@@ -43,7 +47,7 @@ For GitHub Pages, publish the repository root. For Netlify, drag this folder int
 
 ## File guide
 
-- `index.html` — the full three-step test and response form
-- `styles.css` — responsive visual design and farm-map/report styling
-- `app.js` — scenario data, interaction flow, measurement, local saving, and JSON export
-
+- `index.html` — farm setup, personalized dashboard, evidence modal, and pilot question
+- `styles.css` — responsive product interface and farm-map/report styling
+- `app.js` — deterministic sample generation, prioritization, filtering, and local response saving
+- `assets/` — four AI-generated fictional underwater inspection images
