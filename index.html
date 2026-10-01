@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -95,18 +94,13 @@
           <div class="crew-plan" id="crew-plan"></div>
         </section>
 
-        <section class="map-section" aria-labelledby="map-title">
-          <div class="section-heading compact-heading"><div><p class="eyebrow">Geographic cage map</p><h2 id="map-title">Where every cage sits</h2><p>Each marker is an individual simulated cage. Select one to inspect its finding.</p></div><div class="map-key"><span><i class="red"></i> Inspect first</span><span><i class="yellow"></i> Check soon</span><span><i class="green"></i> Normal</span></div></div>
-          <div class="farm-map-shell">
-            <aside class="map-aside">
-              <small>LEASE OVERVIEW</small><p id="map-location"></p>
-              <dl><div><dt>Total area</dt><dd id="map-acres"></dd></div><div><dt>Growing zones</dt><dd id="map-zones"></dd></div><div><dt>Individual cages</dt><dd id="map-pods"></dd></div><div><dt>Gear</dt><dd id="map-gear"></dd></div></dl>
-              <div class="map-match"><small>LOCATION MATCH</small><b id="map-match-label">Looking up location…</b><span id="map-coordinates"></span></div>
-              <p class="map-instruction">Click anywhere on the map to reposition the sample lease center.</p>
-            </aside>
-            <div class="geographic-map-wrap"><div id="lease-map" class="lease-map" aria-label="Approximate geographic map of simulated oyster cages"></div><div class="map-loading" id="map-loading"><span></span> Matching farm location…</div></div>
+        <section class="cage-section" aria-labelledby="cage-title">
+          <div class="section-heading compact-heading"><div><p class="eyebrow">Cage-by-cage review</p><h2 id="cage-title">See every cage clearly</h2><p>Choose a zone, then open any cage for its full detection evidence and response plan.</p></div><div class="status-key"><span><i class="red"></i> Inspect first</span><span><i class="yellow"></i> Check soon</span><span><i class="green"></i> Normal</span></div></div>
+          <div class="cage-explorer">
+            <div class="zone-selector" id="zone-selector" role="tablist" aria-label="Growing zones"></div>
+            <div class="selected-zone-summary" id="selected-zone-summary"></div>
+            <div class="cage-gallery" id="cage-gallery"></div>
           </div>
-          <p class="map-disclaimer">Approximate demonstration only. The location is matched from the town or harbor name, and cage positions are generated inside a sample lease footprint—not taken from survey coordinates. Map © OpenStreetMap contributors; location search by Nominatim.</p>
         </section>
 
         <section class="detection-section" aria-labelledby="detection-title">
@@ -139,7 +133,6 @@
     <div class="zone-modal" id="zone-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden><div class="modal-backdrop" data-close-modal></div><article class="modal-card"><button class="modal-close" type="button" data-close-modal aria-label="Close zone report">×</button><div id="modal-content"></div></article></div>
     <footer><span>FarmSignal concept study · All findings and images are simulated</span><span>Never use this prototype for animal-health or harvest decisions.</span></footer>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

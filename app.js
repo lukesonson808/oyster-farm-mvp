@@ -58,9 +58,7 @@ const ISSUE_PROFILES = {
   }
 };
 
-const state = { config: null, zones: [], conditions: null, generation: 0, commitment: null, mapCenter: null, locationMatch: null, locationSource: null };
-let leaseMap = null;
-let leaseLayers = null;
+const state = { config: null, zones: [], conditions: null, generation: 0, commitment: null, selectedZoneId: null };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
@@ -154,11 +152,13 @@ function buildZones(config) {
     const anomalyIndex = Math.floor(random() * podCount);
     zone.pods = Array.from({ length: podCount }, (_, podIndex) => {
       const isPrimary = podIndex === anomalyIndex;
-      const podIssue = isPrimary ? issue : "healthy";
+      const isSecondary = issue !== "healthy" && podCount > 3 && podIndex === (anomalyIndex + 1) % podCount;
+      const isFlagged = isPrimary || isSecondary;
+      const podIssue = isFlagged ? issue : "healthy";
       const podProfile = ISSUE_PROFILES[podIssue];
-      const podStatus = isPrimary ? status : (issue !== "healthy" && podIndex === (anomalyIndex + 1) % podCount ? "yellow" : "green");
+      const podStatus = isPrimary ? status : isSecondary ? "yellow" : "green";
       const podOysters = Math.max(700, Math.round((oysters / podCount) * between(random, .86, 1.14) / 10) * 10);
-      const podMortality = isPrimary ? mortality : between(random, 1.1, Math.min(5.2, mortality), 1);
+      const podMortality = isPrimary ? mortality : isSecondary && issue === "mortality" ? between(random, 7, Math.max(8, mortality * .72), 1) : between(random, 1.1, Math.min(5.2, mortality), 1);
       return {
         id: `${zone.id}-${String(podIndex + 1).padStart(2, "0")}`,
         index: podIndex,
@@ -167,103 +167,17 @@ function buildZones(config) {
         oysters: podOysters,
         mortality: podMortality,
         survival: Number((100 - podMortality).toFixed(1)),
-        fouling: isPrimary ? fouling : between(random, 4, 24),
+        fouling: isPrimary ? fouling : isSecondary && issue === "fouling" ? between(random, 42, 64) : between(random, 4, 24),
         averageSize: Math.max(35, averageSize + between(random, -5, 5)),
-        confidence: isPrimary ? confidence : between(random, 81, 95),
-        priorityScore: isPrimary ? priorityScore : between(random, 18, 42),
+        confidence: isPrimary ? confidence : isSecondary ? between(random, 68, 82) : between(random, 81, 95),
+        priorityScore: isPrimary ? priorityScore : isSecondary ? between(random, 50, 66) : between(random, 18, 42),
+        imagePosition: `${between(random, 35, 65)}% ${between(random, 35, 65)}%`,
+        scanSecond: 8 + podIndex * 7 + Math.floor(random() * 5),
         ...podProfile
       };
     });
     return zone;
   }).sort((a, b) => a.id.localeCompare(b.id));
-}
-
-async function resolveFarmLocation(config) {
-  const cacheKey = `farmSignalGeo:${config.location.toLowerCase()}`;
-  try {
-    const cached = JSON.parse(localStorage.getItem(cacheKey));
-    if (cached?.center) return cached;
-  } catch (_) {
-    localStorage.removeItem(cacheKey);
-  }
-
-  try {
-    const query = encodeURIComponent(config.location);
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&q=${query}`, {
-      headers: { Accept: "application/json" }
-    });
-    if (!response.ok) throw new Error(`Location lookup returned ${response.status}`);
-    const [match] = await response.json();
-    if (!match) throw new Error("No location match");
-    const result = {
-      center: [Number(match.lat), Number(match.lon)],
-      label: match.display_name.split(",").slice(0, 3).join(","),
-      source: "Location name match"
-    };
-    localStorage.setItem(cacheKey, JSON.stringify(result));
-    return result;
-  } catch (_) {
-    const isMaine = /maine|\bme\b/i.test(config.location);
-    return {
-      center: isMaine ? [44.03, -69.52] : [41.5, -71.3],
-      label: `${config.location} (demonstration center)`,
-      source: "Fallback demo location"
-    };
-  }
-}
-
-function rotatePoint(x, y, angle) {
-  return [x * Math.cos(angle) - y * Math.sin(angle), x * Math.sin(angle) + y * Math.cos(angle)];
-}
-
-function metersToCoordinate(center, xMeters, yMeters) {
-  const latitude = center[0] + yMeters / 111320;
-  const longitude = center[1] + xMeters / (111320 * Math.cos(center[0] * Math.PI / 180));
-  return [latitude, longitude];
-}
-
-function positionCages() {
-  if (!state.mapCenter || !state.config) return;
-  const random = randomFromSeed(hashString(`${state.config.farmName}|layout|${state.config.zoneCount}`));
-  const areaSqMeters = Math.max(2000, state.config.acres * 4046.86);
-  const aspect = 1.65;
-  const leaseWidth = Math.sqrt(areaSqMeters * aspect);
-  const leaseHeight = areaSqMeters / leaseWidth;
-  const columns = Math.ceil(Math.sqrt(state.config.zoneCount * aspect));
-  const rows = Math.ceil(state.config.zoneCount / columns);
-  const cellWidth = leaseWidth / columns;
-  const cellHeight = leaseHeight / rows;
-  const angle = ((hashString(state.config.location) % 44) - 22) * Math.PI / 180;
-
-  const leaseCorners = [[-leaseWidth / 2, -leaseHeight / 2], [leaseWidth / 2, -leaseHeight / 2], [leaseWidth / 2, leaseHeight / 2], [-leaseWidth / 2, leaseHeight / 2]];
-  state.leaseBoundary = leaseCorners.map(([x, y]) => {
-    const [rx, ry] = rotatePoint(x, y, angle);
-    return metersToCoordinate(state.mapCenter, rx, ry);
-  });
-
-  state.zones.forEach((zone, zoneIndex) => {
-    const column = zoneIndex % columns;
-    const row = Math.floor(zoneIndex / columns);
-    const zoneX = -leaseWidth / 2 + (column + .5) * cellWidth;
-    const zoneY = leaseHeight / 2 - (row + .5) * cellHeight;
-    const halfWidth = cellWidth * .42;
-    const halfHeight = cellHeight * .38;
-    const corners = [[-halfWidth, -halfHeight], [halfWidth, -halfHeight], [halfWidth, halfHeight], [-halfWidth, halfHeight]];
-    zone.boundary = corners.map(([x, y]) => {
-      const [rx, ry] = rotatePoint(zoneX + x, zoneY + y, angle);
-      return metersToCoordinate(state.mapCenter, rx, ry);
-    });
-
-    const podColumns = Math.ceil(zone.pods.length / 2);
-    zone.pods.forEach((pod, podIndex) => {
-      const podColumn = podIndex % podColumns;
-      const podRow = Math.floor(podIndex / podColumns);
-      const x = zoneX - halfWidth * .72 + (podColumns === 1 ? 0 : podColumn * halfWidth * 1.44 / (podColumns - 1));
-      const y = zoneY + (podRow === 0 ? halfHeight * .42 : -halfHeight * .42);
-      const [rx, ry] = rotatePoint(x + between(random, -1.8, 1.8, 1), y + between(random, -1.5, 1.5, 1), angle);
-      pod.coordinate = metersToCoordinate(state.mapCenter, rx, ry);
-    });
-  });
 }
 
 function buildConditions(config) {
@@ -433,62 +347,25 @@ function renderCrewPlan() {
   }).join("");
 }
 
-function renderMap() {
-  $("#map-location").textContent = state.config.location;
-  $("#map-acres").textContent = `${state.config.acres} acres`;
-  $("#map-zones").textContent = state.config.zoneCount;
-  $("#map-pods").textContent = state.zones.reduce((sum, zone) => sum + zone.pods.length, 0);
-  $("#map-gear").textContent = state.config.gear;
-  $("#map-match-label").textContent = state.locationMatch || state.config.location;
-  $("#map-coordinates").textContent = state.mapCenter ? `${state.mapCenter[0].toFixed(5)}, ${state.mapCenter[1].toFixed(5)} · ${state.locationSource}` : "Location unavailable";
+function renderSelectedZone() {
+  const zone = state.zones.find(item => item.id === state.selectedZoneId) || state.zones[0];
+  if (!zone) return;
+  state.selectedZoneId = zone.id;
+  const alertCount = zone.pods.filter(pod => pod.status !== "green").length;
+  const liveStock = Math.round(zone.pods.reduce((sum, pod) => sum + pod.oysters * pod.survival / 100, 0) / 10) * 10;
+  $("#selected-zone-summary").innerHTML = `<div><p class="eyebrow">Selected zone</p><h3>Zone ${zone.id} · ${zone.name}</h3><p>${zone.acres} acres · ${zone.pods.length} cages · ${statusLabel(zone.status)}</p></div><div class="zone-summary-metrics"><span><small>Live stock est.</small><b>${formatCount(liveStock)}</b></span><span><small>Cages flagged</small><b>${alertCount} of ${zone.pods.length}</b></span><span><small>Average size</small><b>${zone.averageSize} mm</b></span></div>`;
+  $("#cage-gallery").innerHTML = zone.pods.map(pod => `
+    <article class="cage-card" data-status="${pod.status}">
+      <div class="cage-photo"><img src="${pod.photo}" style="object-position:${pod.imagePosition}" alt="Clear simulated underwater scan for Cage ${pod.id}" /><span class="cage-photo-id">${pod.id}</span><div class="cage-photo-finding"><small>${statusLabel(pod.status)}</small><b>${pod.label}</b></div></div>
+      <div class="cage-card-body"><div class="cage-card-head"><div><h3>Cage ${pod.id}</h3><p>${pod.detectionMethod}</p></div><span class="status-pill ${pod.status}">${pod.confidence}%</span></div><div class="cage-quick-metrics"><div><small>Oysters</small><b>${formatCount(pod.oysters)}</b></div><div><small>Survival</small><b>${pod.survival}%</b></div><div><small>Avg. size</small><b>${pod.averageSize} mm</b></div></div><button class="cage-open" type="button" data-cage-zone="${zone.id}" data-cage-id="${pod.id}">Open detection evidence</button></div>
+    </article>`).join("");
+}
 
-  if (!window.L || !state.mapCenter) {
-    $("#map-loading").innerHTML = "The geographic map could not load. Zone reports remain available below.";
-    return;
-  }
-
-  if (!leaseMap) {
-    leaseMap = L.map("lease-map", { scrollWheelZoom: false, zoomControl: true });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors"
-    }).addTo(leaseMap);
-    leaseLayers = L.layerGroup().addTo(leaseMap);
-    leaseMap.on("click", event => {
-      state.mapCenter = [event.latlng.lat, event.latlng.lng];
-      state.locationMatch = `User-placed lease near ${state.config.location}`;
-      state.locationSource = "Moved on map";
-      positionCages();
-      renderMap();
-      showToast("Sample lease center moved. Cage coordinates updated.");
-    });
-  }
-
-  leaseLayers.clearLayers();
-  const farmBoundary = L.polygon(state.leaseBoundary, {
-    color: "#17332f", weight: 2, dashArray: "7 5", fillColor: "#7bb2a8", fillOpacity: .12
-  }).addTo(leaseLayers);
-  farmBoundary.bindTooltip(`${state.config.farmName} · sample lease boundary`, { sticky: true });
-
-  state.zones.forEach(zone => {
-    const zoneColor = zone.status === "red" ? "#c85143" : zone.status === "yellow" ? "#d39a28" : "#44856c";
-    L.polygon(zone.boundary, { color: zoneColor, weight: 1.5, fillColor: zoneColor, fillOpacity: .08 })
-      .bindTooltip(`Zone ${zone.id} · ${zone.name}`, { direction: "center", sticky: true, className: "zone-map-label" })
-      .addTo(leaseLayers);
-    zone.pods.forEach(pod => {
-      const icon = L.divIcon({
-        className: "cage-marker-shell",
-        html: `<div class="cage-marker ${pod.status}">${pod.id}</div>`,
-        iconSize: [45, 29], iconAnchor: [22, 14], popupAnchor: [0, -13]
-      });
-      const marker = L.marker(pod.coordinate, { icon, title: `Cage ${pod.id}` }).addTo(leaseLayers);
-      marker.bindPopup(`<div class="cage-popup"><small>Zone ${zone.id} · Cage ${pod.id}</small><b>${pod.label}</b><p>${formatCount(pod.oysters)} oysters estimated · ${pod.confidence}% detection confidence</p><button type="button" data-map-zone="${zone.id}" data-map-pod="${pod.id}">Open cage evidence</button></div>`);
-    });
-  });
-
-  leaseMap.fitBounds(farmBoundary.getBounds().pad(.45), { padding: [22, 22] });
-  setTimeout(() => leaseMap.invalidateSize(), 0);
-  $("#map-loading").hidden = true;
+function renderCageExplorer() {
+  const priorityZone = [...state.zones].sort((a, b) => b.priorityScore - a.priorityScore)[0];
+  if (!state.selectedZoneId || !state.zones.some(zone => zone.id === state.selectedZoneId)) state.selectedZoneId = priorityZone?.id || state.zones[0]?.id;
+  $("#zone-selector").innerHTML = state.zones.map(zone => `<button class="zone-tab ${zone.id === state.selectedZoneId ? "is-active" : ""}" type="button" role="tab" aria-selected="${zone.id === state.selectedZoneId}" data-select-zone="${zone.id}"><span>${zone.id}</span><div><b>${zone.name}</b><small>${zone.pods.length} cages · ${statusLabel(zone.status)}</small></div></button>`).join("");
+  renderSelectedZone();
 }
 
 function renderDetectionPlaybook() {
@@ -513,7 +390,7 @@ function reportMarkup(zone) {
         <div class="photo-finding"><small>Visible finding</small><b>${zone.label}</b></div><span class="photo-time">Frame ${String(zone.scanMinute).padStart(2,"0")}:24</span>
       </div>
       <div class="report-body">
-        <div class="report-heading"><div><h3>Zone ${zone.id} · ${zone.name}</h3><p>${zone.acres} acres · ${zone.pods.length} mapped cages · ${state.config.gear}</p></div><span class="status-pill ${zone.status}">${statusLabel(zone.status)}</span></div>
+        <div class="report-heading"><div><h3>Zone ${zone.id} · ${zone.name}</h3><p>${zone.acres} acres · ${zone.pods.length} individual cages · ${state.config.gear}</p></div><span class="status-pill ${zone.status}">${statusLabel(zone.status)}</span></div>
         <div class="zone-metrics"><div><small>Live stock est.</small><b>${formatCount(Math.round(zone.oysters * zone.survival / 100 / 100) * 100)}</b></div><div><small>Survival est.</small><b>${zone.survival}%</b></div><div><small>Avg. size</small><b>${zone.averageSize} mm</b></div></div>
         <div class="recommendation"><span>→</span><div><small>Recommended next step</small><p>${zone.recommendation}</p></div></div>
         <button class="open-report" type="button" data-zone-id="${zone.id}">View detection evidence and response plan</button>
@@ -537,11 +414,11 @@ function renderDashboard() {
   renderConditions();
   renderMetrics();
   renderCrewPlan();
+  renderCageExplorer();
   renderDetectionPlaybook();
   renderReports();
   $("#edit-setup").hidden = false;
   showView("dashboard-view");
-  requestAnimationFrame(renderMap);
 }
 
 function generateReport(showLoader = true) {
@@ -551,15 +428,8 @@ function generateReport(showLoader = true) {
   $("#commitment-box").hidden = false;
   $("#pilot-form").hidden = true;
   $("#commitment-result").hidden = true;
-  const locationPromise = resolveFarmLocation(state.config);
-  const finish = async () => {
-    const location = await locationPromise;
-    state.mapCenter = location.center;
-    state.locationMatch = location.label;
-    state.locationSource = location.source;
-    positionCages();
-    renderDashboard();
-  };
+  state.selectedZoneId = null;
+  const finish = () => renderDashboard();
   if (showLoader) runLoadingSequence(finish);
   else finish();
 }
@@ -573,15 +443,13 @@ function openZone(id, podId = null) {
   const isPod = Boolean(pod);
   const evidence = evidenceFor(target);
   const timeline = actionTimeline(target);
-  const coordinate = target.coordinate || primaryPod.coordinate;
   const title = isPod ? `Cage ${target.id}` : `Zone ${zone.id} · ${zone.name}`;
-  const subtitle = isPod ? `Zone ${zone.id} · ${zone.name}` : `${zone.pods.length} mapped cages · primary evidence from ${primaryPod.id}`;
+  const subtitle = isPod ? `Zone ${zone.id} · ${zone.name}` : `${zone.pods.length} individual cages · primary evidence from ${primaryPod.id}`;
   const gearCondition = target.issue === "equipment" ? "Needs inspection" : target.status === "green" ? "Secure" : zone.gearCondition;
   $("#modal-content").innerHTML = `
-    <div class="modal-photo"><img src="${target.photo}" style="object-position:${zone.imagePosition}" alt="Simulated underwater evidence for ${title}" /><div class="modal-scan-overlay">${target.issue === "healthy" ? "" : `<span class="detection-box" data-label="${target.shortLabel}"></span>`}<span class="frame-meta">SIMULATED FRAME · ${target.confidence}% CUE CONFIDENCE</span></div></div>
+    <div class="modal-photo"><img src="${target.photo}" style="object-position:${isPod ? target.imagePosition : zone.imagePosition}" alt="Simulated underwater evidence for ${title}" /><div class="modal-scan-overlay">${target.issue === "healthy" ? "" : `<span class="detection-box" data-label="${target.shortLabel}"></span>`}<span class="frame-meta">SIMULATED FRAME · ${target.confidence}% CUE CONFIDENCE</span></div></div>
     <div class="modal-body">
       <div class="modal-title-row"><div><p class="eyebrow">${subtitle}</p><h2 id="modal-title">${title}</h2></div><span class="status-pill ${target.status}">${statusLabel(target.status)}</span></div>
-      ${coordinate ? `<span class="location-chip">⌖ ${coordinate[0].toFixed(5)}, ${coordinate[1].toFixed(5)}</span>` : ""}
       <p>${target.detail} The system created this flag using <b>${target.detectionMethod.toLowerCase()}</b>.</p>
       <div class="modal-data"><div><small>Estimated oysters</small><b>${formatCount(isPod ? target.oysters : zone.oysters)}</b></div><div><small>Mortality signal</small><b>${target.mortality}%</b></div><div><small>Mesh fouling</small><b>${target.fouling}%</b></div><div><small>Gear condition</small><b>${gearCondition}</b></div></div>
       <div class="detection-explainer"><h3>Why the system flagged this</h3><div class="evidence-list">${evidence.map(([label, value, note]) => `<div class="evidence-item"><small>${label}</small><b>${value}</b><span>${note}</span></div>`).join("")}</div></div>
@@ -625,12 +493,21 @@ $("#regenerate-button").addEventListener("click", () => {
   generateReport(true);
 });
 
-$("#lease-map").addEventListener("click", event => {
-  const button = event.target.closest("[data-map-zone]");
-  if (button) {
-    event.stopPropagation();
-    openZone(button.dataset.mapZone, button.dataset.mapPod);
-  }
+$("#zone-selector").addEventListener("click", event => {
+  const button = event.target.closest("[data-select-zone]");
+  if (!button) return;
+  state.selectedZoneId = button.dataset.selectZone;
+  $$('[data-select-zone]', event.currentTarget).forEach(item => {
+    const isSelected = item === button;
+    item.classList.toggle("is-active", isSelected);
+    item.setAttribute("aria-selected", String(isSelected));
+  });
+  renderSelectedZone();
+});
+
+$("#cage-gallery").addEventListener("click", event => {
+  const button = event.target.closest("[data-cage-id]");
+  if (button) openZone(button.dataset.cageZone, button.dataset.cageId);
 });
 
 $("#zone-report-grid").addEventListener("click", event => {
