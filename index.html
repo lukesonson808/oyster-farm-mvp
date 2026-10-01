@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A rapid decision-test prototype for oyster-farm inspection planning."
+    />
+    <title>FarmSignal — Oyster inspection decision test</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="FarmSignal home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" role="img">
+            <path d="M5 18.5C9.4 16.7 11.8 13 13.1 7c4 3.2 6.7 6.4 8.2 9.6 2.1 4.5-.9 9.4-5.8 9.4C10.8 26 7.2 23.8 5 18.5Z" />
+            <path d="M8.5 19.2c4.2 1.1 8.2.3 12-2.2" />
+          </svg>
+        </span>
+        <span>FarmSignal</span>
+      </a>
+      <div class="study-pill"><span></span> Prototype study</div>
+      <button class="text-button" id="reset-button" type="button">Start over</button>
+    </header>
+
+    <main id="main-content">
+      <section class="hero" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Morning inspection planner</p>
+          <h1 id="page-title">Where should your crew go first?</h1>
+          <p class="hero-copy">
+            You have one tide window and time to inspect only two growing zones.
+            Make the call you would make before leaving the dock.
+          </p>
+        </div>
+        <div class="date-block" aria-label="Scenario date and farm">
+          <span>Tuesday, October 14</span>
+          <strong>Pemaquid Reach · 12 acres</strong>
+        </div>
+      </section>
+
+      <nav class="stepper" aria-label="Prototype progress">
+        <div class="step is-active" data-step-indicator="1">
+          <span>1</span>
+          <div><small>Your call</small><strong>Pick two zones</strong></div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step" data-step-indicator="2">
+          <span>2</span>
+          <div><small>Scan report</small><strong>Review findings</strong></div>
+        </div>
+        <div class="step-line"></div>
+        <div class="step" data-step-indicator="3">
+          <span>3</span>
+          <div><small>Your response</small><strong>Compare & decide</strong></div>
+        </div>
+      </nav>
+
+      <section id="stage-one" class="stage is-visible" aria-labelledby="stage-one-title">
+        <div class="scenario-strip">
+          <div class="scenario-item">
+            <span class="scenario-icon" aria-hidden="true">↕</span>
+            <div><small>Low tide</small><strong>9:42 AM</strong></div>
+          </div>
+          <div class="scenario-item">
+            <span class="scenario-icon" aria-hidden="true">≈</span>
+            <div><small>Water</small><strong>61°F · Murky</strong></div>
+          </div>
+          <div class="scenario-item">
+            <span class="scenario-icon" aria-hidden="true">◒</span>
+            <div><small>Weather</small><strong>Cloudy · SW 8kt</strong></div>
+          </div>
+          <div class="scenario-item">
+            <span class="scenario-icon" aria-hidden="true">◷</span>
+            <div><small>Crew window</small><strong>4 hours</strong></div>
+          </div>
+        </div>
+
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Before the scan</p>
+            <h2 id="stage-one-title">Choose two zones to inspect today</h2>
+            <p>Use the notes you would normally have before sending out the crew.</p>
+          </div>
+          <div class="selection-counter" id="initial-counter" aria-live="polite">
+            <strong>0</strong> of 2 selected
+          </div>
+        </div>
+
+        <div class="farm-layout">
+          <aside class="map-key" aria-label="Farm map legend">
+            <div class="compass" aria-hidden="true"><b>N</b><span>↑</span></div>
+            <div class="key-row"><span class="key-line lease"></span> Lease boundary</div>
+            <div class="key-row"><span class="key-line channel"></span> Main channel</div>
+            <div class="key-row"><span class="key-dot"></span> Mooring</div>
+          </aside>
+          <div class="farm-map" id="farm-map" aria-label="Map of six oyster-growing zones">
+            <div class="shoreline shoreline-one" aria-hidden="true"></div>
+            <div class="shoreline shoreline-two" aria-hidden="true"></div>
+            <span class="water-label channel-label">MAIN CHANNEL</span>
+            <span class="water-label shore-label">SHORE</span>
+            <div class="depth depth-one">8 ft</div>
+            <div class="depth depth-two">12 ft</div>
+            <div class="depth depth-three">18 ft</div>
+            <div class="zone-grid" id="initial-zone-grid"></div>
+          </div>
+        </div>
+
+        <div class="stage-actions">
+          <p class="helper" id="initial-helper">Select exactly two zones to continue.</p>
+          <button class="primary-button" id="show-report" type="button" disabled>
+            Lock in my plan <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </section>
+
+      <section id="stage-two" class="stage" aria-labelledby="stage-two-title">
+        <div class="report-banner">
+          <div class="report-icon" aria-hidden="true">
+            <svg viewBox="0 0 40 40"><path d="M20 4a16 16 0 1 0 0 32 16 16 0 0 0 0-32Z"/><path d="M20 12v9l6 3"/></svg>
+          </div>
+          <div>
+            <p class="eyebrow">Overnight scan complete</p>
+            <h2 id="stage-two-title">Two zones need attention today</h2>
+            <p>Possible issues are based on visible changes. Confirm all findings in person.</p>
+          </div>
+          <div class="scan-meta"><small>Scan coverage</small><strong>94%</strong></div>
+        </div>
+
+        <div class="legend" aria-label="Priority legend">
+          <strong>Inspection priority</strong>
+          <span><i class="status-dot red"></i> Inspect first</span>
+          <span><i class="status-dot yellow"></i> Check soon</span>
+          <span><i class="status-dot green"></i> No visible issue</span>
+        </div>
+
+        <div class="report-list" id="report-list"></div>
+
+        <div class="second-choice">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow">After the scan</p>
+              <h2>Now choose your two zones</h2>
+              <p>You can keep your original plan or change it based on the report.</p>
+            </div>
+            <div class="selection-counter" id="final-counter" aria-live="polite">
+              <strong>0</strong> of 2 selected
+            </div>
+          </div>
+          <div class="choice-grid" id="final-choice-grid"></div>
+        </div>
+
+        <div class="stage-actions">
+          <p class="helper" id="final-helper">Select exactly two zones to compare your choices.</p>
+          <button class="primary-button" id="compare-button" type="button" disabled>
+            Compare my choices <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </section>
+
+      <section id="stage-three" class="stage" aria-labelledby="stage-three-title">
+        <div class="outcome-card">
+          <p class="eyebrow">Decision result</p>
+          <h2 id="stage-three-title">Did the report change your plan?</h2>
+          <div class="comparison" id="comparison"></div>
+          <div class="change-callout" id="change-callout"></div>
+        </div>
+
+        <form id="response-form" class="response-form">
+          <div class="form-section">
+            <span class="question-number">01</span>
+            <fieldset>
+              <legend>What influenced your second choice most?</legend>
+              <p class="field-help">Choose one.</p>
+              <div class="option-grid" id="influence-options">
+                <label class="radio-card"><input type="radio" name="influence" value="Priority color" required><span><b>Priority color</b><small>The red, yellow, and green ranking</small></span></label>
+                <label class="radio-card"><input type="radio" name="influence" value="Example image"><span><b>Example image</b><small>What the scan appeared to show</small></span></label>
+                <label class="radio-card"><input type="radio" name="influence" value="Recommended action"><span><b>Recommended action</b><small>The specific next step for the crew</small></span></label>
+                <label class="radio-card"><input type="radio" name="influence" value="My own experience"><span><b>My own experience</b><small>History and judgment mattered more</small></span></label>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="form-section">
+            <span class="question-number">02</span>
+            <fieldset>
+              <legend>How useful would this be before a real inspection?</legend>
+              <p class="field-help">Choose one.</p>
+              <div class="scale-options" aria-label="Usefulness rating from one to five">
+                <label><input type="radio" name="usefulness" value="1" required><span>1</span><small>Not useful</small></label>
+                <label><input type="radio" name="usefulness" value="2"><span>2</span><small>Slightly</small></label>
+                <label><input type="radio" name="usefulness" value="3"><span>3</span><small>Somewhat</small></label>
+                <label><input type="radio" name="usefulness" value="4"><span>4</span><small>Very</small></label>
+                <label><input type="radio" name="usefulness" value="5"><span>5</span><small>Essential</small></label>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="form-section pilot-section">
+            <span class="question-number">03</span>
+            <fieldset>
+              <legend>Would you take a next step?</legend>
+              <p class="field-help">This is the main question we are testing.</p>
+              <div class="commitment-options">
+                <label class="commitment-card yes-card">
+                  <input type="radio" name="commitment" value="pilot" required>
+                  <span class="commitment-check">✓</span>
+                  <span><b>Yes, contact me about a pilot</b><small>I’d consider testing this on my farm.</small></span>
+                </label>
+                <label class="commitment-card">
+                  <input type="radio" name="commitment" value="follow-up">
+                  <span class="commitment-check">?</span>
+                  <span><b>Maybe—start with a conversation</b><small>I have questions before sharing farm information.</small></span>
+                </label>
+                <label class="commitment-card">
+                  <input type="radio" name="commitment" value="no">
+                  <span class="commitment-check">×</span>
+                  <span><b>Not right now</b><small>This is not a priority for my operation.</small></span>
+                </label>
+              </div>
+            </fieldset>
+
+            <div id="pilot-details" class="pilot-details" hidden>
+              <div class="detail-header">
+                <div>
+                  <label class="field-label">What would you be willing to share?</label>
+                  <p class="field-help">Select any that you could provide for a small test.</p>
+                </div>
+              </div>
+              <div class="checkbox-grid">
+                <label><input type="checkbox" name="share" value="Farm map"><span>Farm map</span></label>
+                <label><input type="checkbox" name="share" value="Past inspection notes"><span>Past inspection notes</span></label>
+                <label><input type="checkbox" name="share" value="Existing images or video"><span>Existing images or video</span></label>
+                <label><input type="checkbox" name="share" value="30-minute planning call"><span>30-minute planning call</span></label>
+              </div>
+              <div class="contact-row">
+                <label>
+                  <span class="field-label">Name</span>
+                  <input type="text" name="name" autocomplete="name" placeholder="Your name">
+                </label>
+                <label>
+                  <span class="field-label">Email or phone</span>
+                  <input type="text" name="contact" autocomplete="email" placeholder="How should we reach you?">
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="stage-actions submit-actions">
+            <p class="helper">Your response stays on this device unless you download it.</p>
+            <button class="primary-button" type="submit">Submit response <span aria-hidden="true">→</span></button>
+          </div>
+        </form>
+      </section>
+
+      <section id="thank-you" class="stage" aria-labelledby="thank-you-title">
+        <div class="thank-you-card">
+          <div class="success-mark" aria-hidden="true">✓</div>
+          <p class="eyebrow">Response recorded</p>
+          <h2 id="thank-you-title">Thank you for making the call.</h2>
+          <p id="thank-you-copy">Your response has been saved for this interview.</p>
+          <div class="signal-card" id="signal-card"></div>
+          <div class="thank-you-actions">
+            <button class="primary-button" id="download-button" type="button">Download session result</button>
+            <button class="secondary-button" id="new-session-button" type="button">Start a new interview</button>
+          </div>
+          <p class="privacy-note">The download is a small JSON file the researcher can use to compare interviews.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>FarmSignal concept study · Not a diagnostic tool</span>
+      <span>Visible findings should always be confirmed in person.</span>
+    </footer>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
